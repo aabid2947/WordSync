@@ -74,3 +74,29 @@ describe('predictNext', () => {
     expect(out.find((s) => s.word === 'fox')?.score).toBe(1);
   });
 });
+
+describe('note (optimistic learning)', () => {
+  it('adds a new word so it is immediately completable', () => {
+    const m = new SuggestionModel({ version: 1, unigrams: [['apple', 2]], ngrams: [] });
+    expect(m.completePrefix('ser', 5)).toEqual([]);
+    m.note('serendipity', []);
+    expect(m.completePrefix('ser', 5).map((s) => s.word)).toEqual(['serendipity']);
+  });
+
+  it('increments an existing word so its rank can overtake', () => {
+    const m = new SuggestionModel({ version: 1, unigrams: [['cat', 1], ['car', 5]], ngrams: [] });
+    m.note('cat', []);
+    m.note('cat', []);
+    expect(m.completePrefix('ca', 5).map((s) => s.word)).toEqual(['car', 'cat']); // 3 vs 5
+    m.note('cat', []);
+    m.note('cat', []);
+    m.note('cat', []);
+    expect(m.completePrefix('ca', 5).map((s) => s.word)).toEqual(['cat', 'car']); // 6 vs 5
+  });
+
+  it('makes a noted n-gram predict its next word', () => {
+    const m = new SuggestionModel({ version: 1, unigrams: [], ngrams: [] });
+    m.note('coffee', ['morning']);
+    expect(m.predictNext(['morning'], 3).map((s) => s.word)).toContain('coffee');
+  });
+});

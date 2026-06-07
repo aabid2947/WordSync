@@ -1,18 +1,6 @@
+import { contextKeys } from '../text/tokenize';
 import { getDB } from './db';
 import type { LearnEvent, NgramRow, WordRow, WordSource } from './types';
-
-/**
- * Build the n-gram context keys for an event: the immediately preceding token
- * (bigram) and the two preceding tokens joined (trigram). The fast path backs
- * off trigram -> bigram -> unigram, so we store both.
- */
-function buildContexts(context: string[]): string[] {
-  const out: string[] = [];
-  const n = context.length;
-  if (n >= 1) out.push(context[n - 1]!);
-  if (n >= 2) out.push(`${context[n - 2]} ${context[n - 1]}`);
-  return out;
-}
 
 /** Apply a batch of learn events in a single transaction (the SW is the sole writer). */
 export async function applyLearnEvents(events: LearnEvent[]): Promise<void> {
@@ -35,7 +23,7 @@ export async function applyLearnEvents(events: LearnEvent[]): Promise<void> {
       await words.put({ word, count: 1, lastSeen: ev.ts, source: ev.source });
     }
 
-    for (const context of buildContexts(ev.context)) {
+    for (const context of contextKeys(ev.context)) {
       const key: [string, string] = [context, word];
       const ng = await ngrams.get(key);
       if (ng) {

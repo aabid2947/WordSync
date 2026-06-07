@@ -1,3 +1,4 @@
+import { contextKeys } from '../text/tokenize';
 import type { Snapshot } from '../storage/types';
 import type { Suggestion } from './types';
 
@@ -80,6 +81,38 @@ export class SuggestionModel {
       .sort((a, b) => b[1] - a[1])
       .slice(0, limit)
       .map(([word, score]) => ({ word, score, source: 'ngram' as const }));
+  }
+
+  /**
+   * Optimistically fold a just-committed word into the in-memory model so it's
+   * suggestable immediately in this tab, before the SW round-trips it to disk.
+   * (The global unigram prior used for fallback is intentionally not rebuilt —
+   * it's a weak signal and refreshes on the next hydrate.)
+   */
+  note(word: string, context: string[]): void {
+    const w = word.toLowerCase();
+    if (!w) return;
+    this.bumpUnigram(w);
+    for (const ctx of contextKeys(context)) this.bumpNgram(ctx, w);
+  }
+
+  private bumpUnigram(word: string): void {
+    const i = this.lowerBound(word);
+    const found = this.words[i];
+    if (found && found.word === word) found.count += 1;
+    else this.words.splice(i, 0, { word, count: 1 });
+  }
+
+  private bumpNgram(context: string, next: string): void {
+    let list = this.byContext.get(context);
+    if (!list) {
+      list = [];
+      this.byContext.set(context, list);
+    }
+    const entry = list.find((e) => e.word === next);
+    if (entry) entry.count += 1;
+    else list.push({ word: next, count: 1 });
+    list.sort((a, b) => b.count - a.count); // keep desc for predictNext normalization
   }
 
   /** Entries whose word starts with `prefix`, via binary-search lower bound. */
