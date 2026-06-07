@@ -1,9 +1,10 @@
 import { SuggestionController } from '../lib/content/controller';
-import { caretRect, readField } from '../lib/dom/caret';
+import { caretRect, readField, type FieldState } from '../lib/dom/caret';
 import { deepActiveElement, isEditable } from '../lib/dom/detect';
 import { acceptInto } from '../lib/dom/insert';
 import { SuggestionStrip } from '../lib/dom/strip';
 import { getSettings, watchSettings, type Settings } from '../lib/storage/settings';
+import { splitAtCaret } from '../lib/text/tokenize';
 import { sendMessage } from '../utils/messages';
 
 // Content script — every frame, every site (isolated world). All handlers are
@@ -28,6 +29,8 @@ async function boot(): Promise<void> {
   let target: HTMLElement | null = null;
   let modelLoading = false;
   let learnTimer: ReturnType<typeof setTimeout> | null = null;
+  let llmTimer: ReturnType<typeof setTimeout> | null = null;
+  let llmSeq = 0; // bumped on every refresh; stale LLM replies are ignored
 
   function isDenied(s: Settings): boolean {
     try {
@@ -65,6 +68,7 @@ async function boot(): Promise<void> {
 
   function refresh(): void {
     if (disabled || !target) return;
+    llmSeq += 1; // invalidate any in-flight LLM request
     try {
       const state = readField(target);
       if (!state) {
@@ -78,9 +82,26 @@ async function boot(): Promise<void> {
         return;
       }
       getStrip().show(words, caretRect(target), onAccept);
+      maybeRequestLLM(state, llmSeq);
     } catch {
       strip?.hide();
     }
+  }
+
+  function maybeRequestLLM(state: FieldState, seq: number): void {
+    if (!settings.useLLM || !controller.ready || !controller.suggestsNextWord) return;
+    if (llmTimer != null) clearTimeout(llmTimer);
+    const { context } = splitAtCaret(state.text, state.caret);
+    llmTimer = setTimeout(() => {
+      llmTimer = null;
+      void sendMessage('requestCompletion', { prefix: '', context })
+        .then(({ words }) => {
+          if (seq !== llmSeq || !target || words.length === 0) return;
+          const merged = controller.blendWith(words);
+          if (merged.length > 0) getStrip().show(merged, caretRect(target), onAccept);
+        })
+        .catch(() => {});
+    }, 200);
   }
 
   function onAccept(index: number): void {

@@ -4,6 +4,12 @@ import { suggestFast } from '../engine/fastpath';
 import { SuggestionModel } from '../engine/model';
 import { splitAtCaret } from '../text/tokenize';
 import type { LearnEvent, Snapshot } from '../storage/types';
+import type { Suggestion } from '../engine/types';
+
+// LLM suggestions sit just below a strong personal match but can outrank weak
+// fallbacks. Exact weighting is a tuning knob (CLAUDE.md §6).
+const LLM_TOP_SCORE = 0.65;
+const LLM_STEP = 0.05;
 
 export interface FieldState {
   text: string;
@@ -21,6 +27,8 @@ export class SuggestionController {
   private lastPrefix = '';
   private lastContext: string[] = [];
   private shown: string[] = [];
+  private lastFast: Suggestion[] = [];
+  private nextWord = false;
   private pending: LearnEvent[] = [];
 
   constructor(
@@ -34,6 +42,11 @@ export class SuggestionController {
 
   get pendingCount(): number {
     return this.pending.length;
+  }
+
+  /** True when the last update was a next-word context (worth an LLM query). */
+  get suggestsNextWord(): boolean {
+    return this.nextWord;
   }
 
   setSnapshot(snapshot: Snapshot): void {
@@ -59,13 +72,29 @@ export class SuggestionController {
 
     // Don't suggest on a truly empty field (no prefix, no context).
     if (prefix === '' && context.length === 0) {
+      this.nextWord = false;
+      this.lastFast = [];
       this.shown = [];
       return this.shown;
     }
 
-    this.shown = blend([suggestFast(this.model, state.text, state.caret, this.limit)], this.limit).map(
-      (s) => s.word,
-    );
+    this.nextWord = prefix === '';
+    this.lastFast = suggestFast(this.model, state.text, state.caret, this.limit);
+    this.shown = blend([this.lastFast], this.limit).map((s) => s.word);
+    return this.shown;
+  }
+
+  /**
+   * Re-rank the last fast-path suggestions together with async LLM next-word
+   * candidates. Returns the new display list. Fast-path (personal) wins ties.
+   */
+  blendWith(llmWords: string[]): string[] {
+    const llm: Suggestion[] = [];
+    llmWords.forEach((word, i) => {
+      const w = word.toLowerCase();
+      if (w) llm.push({ word: w, score: Math.max(0.1, LLM_TOP_SCORE - i * LLM_STEP), source: 'llm' });
+    });
+    this.shown = blend([this.lastFast, llm], this.limit).map((s) => s.word);
     return this.shown;
   }
 

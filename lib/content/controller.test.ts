@@ -55,4 +55,17 @@ describe('SuggestionController', () => {
     c.update({ text: 'br', caret: 2 });
     expect(c.accept({ text: 'br', caret: 2 }, 9)).toBeNull();
   });
+
+  it('blends LLM words in, keeping strong fast-path matches ahead', () => {
+    const c = make();
+    c.update({ text: 'br', caret: 2 }); // fast-path: brown (1.0), bring (0.6)
+    // 'brown' also from LLM (must not displace the frequency hit); 'brilliant' is new.
+    expect(c.blendWith(['brown', 'brilliant'])).toEqual(['brown', 'bring', 'brilliant']);
+  });
+
+  it('uses only LLM words when there is no fast-path context', () => {
+    const c = make();
+    c.update({ text: '', caret: 0 }); // empty -> no fast-path
+    expect(c.blendWith(['hello', 'world'])).toEqual(['hello', 'world']);
+  });
 });
