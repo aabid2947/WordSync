@@ -1,0 +1,147 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+body {
+  margin: 0;
+  background: #f6f7f9;
+  color: #202124;
+}
+
+.options {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 20px 64px;
+}
+.options h1 {
+  font-size: 22px;
+}
+
+.card {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.06);
+  padding: 20px 22px;
+  margin-top: 20px;
+}
+.card h2 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+}
+.row input[type='text'] {
+  flex: 1;
+  max-width: 360px;
+  font: inherit;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid #dadce0;
+}
+
+.words-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.word-actions {
+  display: flex;
+  gap: 8px;
+}
+
+button {
+  font: inherit;
+  border: 1px solid #dadce0;
+  background: #fff;
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+button.danger {
+  color: #c5221f;
+  border-color: #f3c1bf;
+}
+button.more {
+  display: block;
+  margin: 12px auto 0;
+}
+
+.search {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #dadce0;
+  margin: 12px 0;
+}
+
+.empty {
+  opacity: 0.6;
+  text-align: center;
+  padding: 16px 0;
+}
+
+.word-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 50vh;
+  overflow: auto;
+}
+.word-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+.word-list .w {
+  flex: 1;
+  font-weight: 500;
+}
+.word-list .meta {
+  font-size: 12px;
+  opacity: 0.55;
+}
+.del {
+  border: 0;
+  background: none;
+  color: #80868b;
+  padding: 2px 6px;
+}
+.del:hover {
+  color: #c5221f;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #1f1f22;
+    color: #e8eaed;
+  }
+  .card {
+    background: #2a2a2e;
+    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.35);
+  }
+  button {
+    background: #2a2a2e;
+    color: #e8eaed;
+    border-color: #48484d;
+  }
+  .row input[type='text'],
+  .search {
+    background: #1f1f22;
+    color: #e8eaed;
+    border-color: #48484d;
+  }
+  .word-list li {
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+}

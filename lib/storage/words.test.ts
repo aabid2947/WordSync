@@ -2,7 +2,10 @@ import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { __resetDBForTests } from './db';
 import {
+  allWords,
   applyLearnEvents,
+  deleteWord,
+  listWords,
   queryByContext,
   queryByPrefix,
   seedWords,
@@ -97,5 +100,36 @@ describe('topUnigrams', () => {
   it('returns the highest-count words first', async () => {
     await seedWords([{ word: 'a', count: 10 }, { word: 'b', count: 3 }, { word: 'c', count: 7 }], 'typed', 1);
     expect((await topUnigrams(2)).map((r) => r.word)).toEqual(['a', 'c']);
+  });
+});
+
+describe('listWords', () => {
+  it('filters by query, sorts by count desc, and paginates', async () => {
+    await seedWords(
+      [{ word: 'apple', count: 3 }, { word: 'apply', count: 9 }, { word: 'banana', count: 5 }],
+      'typed',
+      1,
+    );
+    const page = await listWords({ query: 'app', limit: 1, offset: 0 });
+    expect(page.total).toBe(2);
+    expect(page.words.map((w) => w.word)).toEqual(['apply']); // highest count first
+    const next = await listWords({ query: 'app', limit: 1, offset: 1 });
+    expect(next.words.map((w) => w.word)).toEqual(['apple']);
+  });
+});
+
+describe('deleteWord', () => {
+  it('removes the word and the n-grams that would resurface it', async () => {
+    await applyLearnEvents([typed('fox', ['the', 'quick'])]);
+    await deleteWord('fox');
+    expect(await queryByPrefix('fox')).toEqual([]);
+    expect(await queryByContext('quick')).toEqual([]); // ngram with next='fox' gone
+  });
+});
+
+describe('allWords', () => {
+  it('returns every stored word', async () => {
+    await seedWords([{ word: 'a' }, { word: 'b' }], 'typed', 1);
+    expect((await allWords()).map((w) => w.word).sort()).toEqual(['a', 'b']);
   });
 });

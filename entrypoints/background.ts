@@ -1,7 +1,15 @@
 import { browser } from 'wxt/browser';
 import { onMessage, sendMessage } from '../utils/messages';
 import { buildSnapshot } from '../lib/storage/snapshot';
-import { applyLearnEvents, seedWords, wordCount } from '../lib/storage/words';
+import { clearAll } from '../lib/storage/db';
+import {
+  allWords,
+  applyLearnEvents,
+  deleteWord,
+  listWords,
+  seedWords,
+  wordCount,
+} from '../lib/storage/words';
 
 // Minimal typing for chrome.offscreen (absent from the webextension-polyfill types).
 interface OffscreenApi {
@@ -73,6 +81,12 @@ export default defineBackground(() => {
   });
 
   onMessage('getStats', async () => ({ words: await wordCount() }));
+
+  // Options page — word management, export, reset (SW stays the sole DB writer).
+  onMessage('listWords', ({ data }) => listWords(data));
+  onMessage('deleteWord', ({ data }) => deleteWord(data));
+  onMessage('exportWords', async () => ({ words: await allWords() }));
+  onMessage('clearData', () => clearAll());
 
   browser.runtime.onInstalled.addListener((details) => {
     if (details.reason === 'install') {

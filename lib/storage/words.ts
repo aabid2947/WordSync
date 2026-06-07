@@ -124,3 +124,41 @@ export async function wordCount(): Promise<number> {
   const db = await getDB();
   return db.count('words');
 }
+
+export interface WordPage {
+  words: WordRow[];
+  total: number;
+}
+
+/** Search/sort/paginate words for the options page. */
+export async function listWords(
+  opts: { query?: string; limit?: number; offset?: number } = {},
+): Promise<WordPage> {
+  const { query = '', limit = 100, offset = 0 } = opts;
+  const db = await getDB();
+  const all = await db.getAll('words');
+  const q = query.toLowerCase().trim();
+  const filtered = q ? all.filter((w) => w.word.includes(q)) : all;
+  filtered.sort((a, b) => b.count - a.count || (a.word < b.word ? -1 : a.word > b.word ? 1 : 0));
+  return { words: filtered.slice(offset, offset + limit), total: filtered.length };
+}
+
+/** Delete a word and any n-grams that would resurface it as a next-word. */
+export async function deleteWord(word: string): Promise<void> {
+  const w = word.toLowerCase();
+  const db = await getDB();
+  await db.delete('words', w);
+  const tx = db.transaction('ngrams', 'readwrite');
+  let cursor = await tx.store.openCursor();
+  while (cursor) {
+    if (cursor.value.next === w) await cursor.delete();
+    cursor = await cursor.continue();
+  }
+  await tx.done;
+}
+
+/** All words, for export. */
+export async function allWords(): Promise<WordRow[]> {
+  const db = await getDB();
+  return db.getAll('words');
+}

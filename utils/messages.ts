@@ -1,5 +1,6 @@
 import { defineExtensionMessaging } from '@webext-core/messaging';
-import type { LearnEvent, Snapshot } from '../lib/storage/types';
+import type { LearnEvent, Snapshot, WordRow } from '../lib/storage/types';
+import type { WordPage } from '../lib/storage/words';
 import type { CompletionRequest, CompletionResult, LlmStatus } from '../lib/engine/llm';
 
 /**
@@ -15,6 +16,14 @@ interface ProtocolMap {
   seed(words: string[]): { imported: number };
   /** UI -> SW: lightweight stats for the popup. */
   getStats(): { words: number };
+  /** Options -> SW: search/paginate the word store. */
+  listWords(opts: { query?: string; limit?: number; offset?: number }): WordPage;
+  /** Options -> SW: delete a single word. */
+  deleteWord(word: string): void;
+  /** Options -> SW: all words, for export. */
+  exportWords(): { words: WordRow[] };
+  /** Options -> SW: wipe all learned data. */
+  clearData(): void;
   /** Content -> SW: get LLM next-word candidates (SW spins up + forwards to offscreen). */
   requestCompletion(request: CompletionRequest): CompletionResult;
   /** SW -> offscreen: actually run the model. Handled ONLY in the offscreen doc. */
