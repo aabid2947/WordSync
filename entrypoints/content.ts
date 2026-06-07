@@ -1,4 +1,5 @@
 import { SuggestionController } from '../lib/content/controller';
+import { dlog } from '../lib/debug';
 import { caretRect, readField, type FieldState } from '../lib/dom/caret';
 import { deepActiveElement, isEditable } from '../lib/dom/detect';
 import { acceptInto } from '../lib/dom/insert';
@@ -30,12 +31,12 @@ export default defineContentScript({
   runAt: 'document_idle',
   main() {
     const hasCtx = !!(globalThis as { chrome?: { runtime?: { id?: string } } }).chrome?.runtime?.id;
-    console.log('[wordsync] content loaded', { url: location.href, hasCtx, top: window.top === window });
+    dlog('content loaded', { url: location.href, hasCtx, top: window.top === window });
     // about:blank / srcdoc / sandboxed frames (which the fallback flags inject
     // into) may have no usable extension context — `chrome.runtime.id` is absent.
     // Bail before touching any extension API so the messaging polyfill can't throw.
     if (!hasCtx) return;
-    void boot().catch((e) => console.log('[wordsync] boot error', e));
+    void boot().catch((e) => dlog('boot error', e));
   },
 });
 
@@ -45,7 +46,7 @@ async function boot(): Promise<void> {
 
   let settings = initial;
   let disabled = isDenied(settings);
-  console.log('[wordsync] boot', { host: location.hostname, disabled });
+  dlog('boot', { host: location.hostname, disabled });
   const controller = new SuggestionController(settings.suggestionCount);
   let strip: SuggestionStrip | null = null;
   let target: HTMLElement | null = null;
@@ -53,6 +54,24 @@ async function boot(): Promise<void> {
   let learnTimer: ReturnType<typeof setTimeout> | null = null;
   let llmTimer: ReturnType<typeof setTimeout> | null = null;
   let llmSeq = 0; // bumped on every refresh; stale LLM replies are ignored
+  let observer: MutationObserver | null = null;
+
+  // Watch the focused field for programmatic content changes (e.g. a chat app
+  // clearing the box after send) — those fire no `input` event, so without this
+  // the strip would linger with stale suggestions.
+  function observe(el: HTMLElement): void {
+    observer?.disconnect();
+    try {
+      observer = new MutationObserver(() => refresh());
+      observer.observe(el, { childList: true, subtree: true, characterData: true });
+    } catch {
+      observer = null;
+    }
+  }
+  function unobserve(): void {
+    observer?.disconnect();
+    observer = null;
+  }
 
   function isDenied(s: Settings): boolean {
     try {
@@ -74,9 +93,9 @@ async function boot(): Promise<void> {
       controller.setSnapshot(await sendMessage('hydrate', undefined));
       const base = await loadBaseWords();
       controller.setBase(base);
-      console.log('[wordsync] model ready, base words:', base.length);
+      dlog('model ready, base words:', base.length);
     } catch (e) {
-      console.log('[wordsync] ensureModel failed', e);
+      dlog('ensureModel failed', e);
     } finally {
       modelLoading = false;
     }
@@ -101,7 +120,7 @@ async function boot(): Promise<void> {
         return;
       }
       const words = controller.update(state);
-      console.log('[wordsync] refresh', { text: state.text, caret: state.caret, words, ready: controller.ready });
+      dlog('refresh', { text: state.text, caret: state.caret, words, ready: controller.ready });
       if (controller.pendingCount > 0) scheduleLearnFlush();
       if (words.length === 0) {
         strip?.hide();
@@ -159,11 +178,19 @@ async function boot(): Promise<void> {
     );
     if (isEditable(candidate)) {
       target = candidate;
+      observe(candidate);
       void ensureModel().then(refresh);
     } else {
       target = null;
+      unobserve();
       strip?.hide();
     }
+  }
+
+  function onFocusOut(e: Event): void {
+    // Focus leaving the tracked field dismisses the strip. Chip clicks use
+    // mousedown+preventDefault, so they don't blur the field.
+    if (e.target === target) strip?.hide();
   }
 
   function onInput(e: Event): void {
@@ -176,11 +203,22 @@ async function boot(): Promise<void> {
   function onKeyDown(e: KeyboardEvent): void {
     if (!strip || !strip.isVisible()) return;
     switch (e.key) {
-      case 'Enter':
       case 'Tab':
+        // Tab always accepts the highlighted/first suggestion.
         e.preventDefault();
         e.stopPropagation();
         strip.acceptHighlighted();
+        break;
+      case 'Enter':
+        // Enter only accepts when the user has arrowed to a suggestion; otherwise
+        // it passes through (send the message / newline) and we dismiss the strip.
+        if (strip.hasHighlight()) {
+          e.preventDefault();
+          e.stopPropagation();
+          strip.acceptHighlighted();
+        } else {
+          strip.hide();
+        }
         break;
       case 'ArrowDown':
         e.preventDefault();
@@ -211,6 +249,7 @@ async function boot(): Promise<void> {
   }
 
   document.addEventListener('focusin', onFocusIn, true);
+  document.addEventListener('focusout', onFocusOut, true);
   document.addEventListener('input', onInput, true);
   document.addEventListener('keydown', onKeyDown, true);
   window.addEventListener('scroll', onReposition, true);

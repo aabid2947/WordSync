@@ -114,6 +114,11 @@ export class SuggestionStrip {
     return this.visible;
   }
 
+  /** Whether the user has explicitly highlighted a suggestion (via arrow keys). */
+  hasHighlight(): boolean {
+    return this.highlighted >= 0;
+  }
+
   move(direction: 1 | -1): void {
     if (this.items.length === 0) return;
     const n = this.items.length;

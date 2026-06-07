@@ -54,9 +54,7 @@ async function getBaseWordsCached(): Promise<string[]> {
     const res = await fetch(browser.runtime.getURL('/words-en.txt'));
     const text = await res.text();
     baseWordsCache = text.split('\n').map((w) => w.trim()).filter(Boolean);
-    console.log('[wordsync-sw] base words loaded:', baseWordsCache.length);
-  } catch (e) {
-    console.log('[wordsync-sw] base words FETCH FAILED', e);
+  } catch {
     baseWordsCache = [];
   }
   return baseWordsCache;
@@ -67,11 +65,7 @@ async function getBaseWordsCached(): Promise<string[]> {
 // reads/writes durable storage directly.
 export default defineBackground(() => {
   // Content scripts pull the latest top-N model on activation.
-  onMessage('hydrate', async () => {
-    const snap = await buildSnapshot();
-    console.log('[wordsync-sw] hydrate ->', snap.unigrams.length, 'unigrams');
-    return snap;
-  });
+  onMessage('hydrate', () => buildSnapshot());
 
   // Content scripts debounce/batch learn events before sending; each batch is
   // applied in a single transaction. Applied immediately (not re-queued) because
@@ -103,11 +97,7 @@ export default defineBackground(() => {
   });
 
   // Content scripts get the base vocabulary from here (CSP-immune on strict sites).
-  onMessage('getBaseWords', async () => {
-    const words = await getBaseWordsCached();
-    console.log('[wordsync-sw] getBaseWords ->', words.length);
-    return words;
-  });
+  onMessage('getBaseWords', () => getBaseWordsCached());
 
   onMessage('getStats', async () => ({ words: await wordCount() }));
 
