@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+jobs:
+  extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run compile
+      - run: npm test
+      - run: npm run build
+
+  relay:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: relay
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # `npm install` (not ci): wrangler is declared but not in the lockfile,
+      # since it's only needed for dev/deploy.
+      - run: npm install
+      - run: npm run compile
+      - run: npm test
+
+  # Build store-ready zips on a version tag and upload them as artifacts.
+  # Wire up store submission / `wrangler deploy` here once the secrets exist:
+  #   - CHROME_EXTENSION_ID / CWS credentials  ->  npx wxt submit
+  #   - CLOUDFLARE_API_TOKEN                    ->  (cd relay && npm i && npx wrangler deploy)
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [extension, relay]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run zip
+      - run: npm run zip:firefox
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wordsync-extension
+          path: .output/*.zip

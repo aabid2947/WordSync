@@ -10,6 +10,8 @@
     "build": "wxt build",
     "build:firefox": "wxt build -b firefox",
     "zip": "wxt zip",
+    "zip:firefox": "wxt zip -b firefox",
+    "icons": "node scripts/gen-icons.mjs",
     "compile": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
