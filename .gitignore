@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# WXT / build output
+.wxt/
+.output/
+dist/
+web-ext-artifacts/
+stats.html
+
+# Cloudflare / Wrangler
+.wrangler/
+relay/.wrangler/
+
+# Secrets & local env  (NEVER commit these)
+.env
+.env.*
+.dev.vars
+.dev.vars.*
+*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
