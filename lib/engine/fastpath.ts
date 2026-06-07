@@ -1,11 +1,12 @@
 import { splitAtCaret } from '../text/tokenize';
+import { blend } from './blend';
 import type { SuggestionModel } from './model';
 import type { Suggestion } from './types';
 
 /**
  * The synchronous fast path the content script runs on every relevant keystroke.
- * Routes to prefix completion when mid-word, or next-word prediction when the
- * caret sits after a separator. Pure and allocation-light by design.
+ * Mid-word: personal completions + base completions + spelling corrections,
+ * blended and ranked. After a separator: next-word prediction. Pure by design.
  */
 export function suggestFast(
   model: SuggestionModel,
@@ -14,5 +15,13 @@ export function suggestFast(
   limit: number,
 ): Suggestion[] {
   const { prefix, context } = splitAtCaret(text, caret);
-  return prefix ? model.completePrefix(prefix, limit) : model.predictNext(context, limit);
+  if (!prefix) return model.predictNext(context, limit);
+  return blend(
+    [
+      model.completePrefix(prefix, limit),
+      model.basePrefix(prefix, limit),
+      model.correct(prefix, limit),
+    ],
+    limit,
+  );
 }

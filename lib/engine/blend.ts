@@ -3,8 +3,10 @@ import type { Suggestion, SuggestionSource } from './types';
 // On a score tie, personal data wins over the generic model (CLAUDE.md §6).
 const SOURCE_RANK: Record<SuggestionSource, number> = {
   frequency: 0,
-  ngram: 1,
-  llm: 2,
+  correction: 1,
+  ngram: 2,
+  base: 3,
+  llm: 4,
 };
 
 /**

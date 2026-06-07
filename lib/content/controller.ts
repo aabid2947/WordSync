@@ -29,6 +29,7 @@ export class SuggestionController {
   private shown: string[] = [];
   private lastFast: Suggestion[] = [];
   private nextWord = false;
+  private baseWords: string[] = [];
   private pending: LearnEvent[] = [];
 
   constructor(
@@ -51,6 +52,13 @@ export class SuggestionController {
 
   setSnapshot(snapshot: Snapshot): void {
     this.model = new SuggestionModel(snapshot);
+    if (this.baseWords.length > 0) this.model.loadBase(this.baseWords);
+  }
+
+  /** Provide the bundled base vocabulary; applied to the current/next model. */
+  setBase(words: string[]): void {
+    this.baseWords = words;
+    this.model?.loadBase(words);
   }
 
   setLimit(limit: number): void {

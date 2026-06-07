@@ -1,4 +1,4 @@
-export type SuggestionSource = 'frequency' | 'ngram' | 'llm';
+export type SuggestionSource = 'frequency' | 'correction' | 'ngram' | 'base' | 'llm';
 
 export interface Suggestion {
   /** The suggested word (lowercased; the inserter re-cases to match context). */

@@ -1,4 +1,5 @@
 import { contextKeys } from '../text/tokenize';
+import { boundedLevenshtein } from './distance';
 import type { Snapshot } from '../storage/types';
 import type { Suggestion } from './types';
 
@@ -12,6 +13,25 @@ interface Entry {
 const W_TRIGRAM = 1.0;
 const W_BIGRAM = 0.6;
 const W_UNIGRAM = 0.1;
+const W_BASE = 0.05; // bundled common words — weakest next-word fallback
+
+/** Binary-search prefix scan over an alphabetically sorted string array. */
+function prefixIn(sorted: string[], prefix: string): string[] {
+  let lo = 0;
+  let hi = sorted.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (sorted[mid]! < prefix) lo = mid + 1;
+    else hi = mid;
+  }
+  const out: string[] = [];
+  for (let i = lo; i < sorted.length; i++) {
+    const w = sorted[i]!;
+    if (!w.startsWith(prefix)) break;
+    out.push(w);
+  }
+  return out;
+}
 
 /**
  * In-memory suggestion model the content script hydrates from a {@link Snapshot}.
@@ -25,12 +45,21 @@ export class SuggestionModel {
   private readonly topWords: Entry[];
   /** context -> candidate next-words, each list sorted by count desc. */
   private readonly byContext: Map<string, Entry[]>;
+  /** Fast membership set for "is this a real word the user has typed". */
+  private readonly personal = new Set<string>();
+
+  // Bundled base vocabulary (loaded via loadBase) — a low-priority layer for
+  // suggestions and spelling-correction targets, separate from personal data.
+  private baseSorted: string[] = [];
+  private baseRank = new Map<string, number>();
+  private baseTop: Entry[] = [];
 
   constructor(snapshot: Snapshot) {
     this.version = snapshot.version;
 
     this.words = snapshot.unigrams.map(([word, count]) => ({ word, count }));
     this.words.sort((a, b) => (a.word < b.word ? -1 : a.word > b.word ? 1 : 0));
+    for (const e of this.words) this.personal.add(e.word);
 
     this.topWords = [...this.words].sort((a, b) => b.count - a.count);
 
@@ -41,6 +70,22 @@ export class SuggestionModel {
       else this.byContext.set(context, [{ word: next, count }]);
     }
     for (const list of this.byContext.values()) list.sort((a, b) => b.count - a.count);
+  }
+
+  /** Load the bundled base vocabulary (frequency-ordered). Safe to call repeatedly. */
+  loadBase(words: string[]): void {
+    this.baseRank = new Map();
+    words.forEach((w, rank) => {
+      if (!this.baseRank.has(w)) this.baseRank.set(w, rank);
+    });
+    this.baseSorted = [...this.baseRank.keys()].sort();
+    const top = Math.min(300, words.length);
+    this.baseTop = words.slice(0, top).map((w, rank) => ({ word: w, count: top - rank }));
+  }
+
+  /** True if `word` is a real word we know (personal or base) — i.e. not a typo. */
+  isKnown(word: string): boolean {
+    return this.personal.has(word) || this.baseRank.has(word);
   }
 
   /** Words extending `prefix` (excluding the exact prefix), ranked by frequency. */
@@ -76,6 +121,7 @@ export class SuggestionModel {
     consider(trigram ? this.byContext.get(trigram) : undefined, W_TRIGRAM);
     consider(bigram ? this.byContext.get(bigram) : undefined, W_BIGRAM);
     consider(this.topWords, W_UNIGRAM);
+    consider(this.baseTop, W_BASE);
 
     return [...scored.entries()]
       .sort((a, b) => b[1] - a[1])
@@ -101,6 +147,7 @@ export class SuggestionModel {
     const found = this.words[i];
     if (found && found.word === word) found.count += 1;
     else this.words.splice(i, 0, { word, count: 1 });
+    this.personal.add(word);
   }
 
   private bumpNgram(context: string, next: string): void {
@@ -113,6 +160,72 @@ export class SuggestionModel {
     if (entry) entry.count += 1;
     else list.push({ word: next, count: 1 });
     list.sort((a, b) => b.count - a.count); // keep desc for predictNext normalization
+  }
+
+  /** Base-vocabulary prefix completions, scored in a low band below personal words. */
+  basePrefix(prefix: string, limit: number): Suggestion[] {
+    const p = prefix.toLowerCase();
+    if (!p || limit <= 0 || this.baseSorted.length === 0) return [];
+    const total = this.baseSorted.length;
+    return prefixIn(this.baseSorted, p)
+      .filter((w) => w !== p && !this.personal.has(w))
+      .map((w) => ({
+        word: w,
+        score: 0.3 * (1 - (this.baseRank.get(w) ?? total) / total),
+        source: 'base' as const,
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
+  }
+
+  /**
+   * Spelling corrections for an *unknown* token: near words by edit distance,
+   * ranked by distance, then personal-over-base, then frequency. Returns [] for
+   * known words (we don't "correct" correctly-spelled words) and short fragments.
+   */
+  correct(token: string, limit: number): Suggestion[] {
+    const t = token.toLowerCase();
+    if (limit <= 0 || t.length < 3 || t.length > 24 || this.isKnown(t)) return [];
+    const max = t.length <= 4 ? 1 : 2;
+
+    interface Cand {
+      word: string;
+      dist: number;
+      freq: number;
+      personal: boolean;
+    }
+    const found: Cand[] = [];
+    const consider = (word: string, freq: number, personal: boolean): void => {
+      if (Math.abs(word.length - t.length) > max) return;
+      const dist = boundedLevenshtein(t, word, max);
+      if (dist >= 1 && dist <= max) found.push({ word, dist, freq, personal });
+    };
+    for (const e of this.words) consider(e.word, e.count, true);
+    for (const w of this.baseSorted) consider(w, this.baseFreq(w), false);
+
+    const best = new Map<string, Cand>();
+    for (const c of found) {
+      const cur = best.get(c.word);
+      if (!cur || c.dist < cur.dist || (c.dist === cur.dist && c.freq > cur.freq)) {
+        best.set(c.word, c);
+      }
+    }
+    return [...best.values()]
+      .sort(
+        (a, b) =>
+          a.dist - b.dist || Number(b.personal) - Number(a.personal) || b.freq - a.freq,
+      )
+      .slice(0, limit)
+      .map((c) => ({
+        word: c.word,
+        score: (c.dist === 1 ? 0.58 : 0.42) + (c.personal ? 0.02 : 0),
+        source: 'correction' as const,
+      }));
+  }
+
+  private baseFreq(word: string): number {
+    const total = this.baseSorted.length || 1;
+    return total - (this.baseRank.get(word) ?? total);
   }
 
   /** Entries whose word starts with `prefix`, via binary-search lower bound. */

@@ -6,6 +6,11 @@ import { SuggestionStrip } from '../lib/dom/strip';
 import { getSettings, isHostDenied, watchSettings, type Settings } from '../lib/storage/settings';
 import { splitAtCaret } from '../lib/text/tokenize';
 import { sendMessage } from '../utils/messages';
+import baseWordsRaw from '../lib/engine/data/words-en.txt?raw';
+
+// Bundled base English vocabulary (frequency-ordered) for cold-start suggestions
+// and spelling-correction targets. Parsed once per frame.
+const BASE_WORDS = baseWordsRaw.split('\n').map((w) => w.trim()).filter(Boolean);
 
 // Content script — every frame, every site (isolated world). All handlers are
 // defensive: a failure degrades to "no suggestions", never a broken page.
@@ -25,6 +30,7 @@ async function boot(): Promise<void> {
   let settings = initial;
   let disabled = isDenied(settings);
   const controller = new SuggestionController(settings.suggestionCount);
+  controller.setBase(BASE_WORDS);
   let strip: SuggestionStrip | null = null;
   let target: HTMLElement | null = null;
   let modelLoading = false;
