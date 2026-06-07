@@ -29,6 +29,10 @@ export default defineContentScript({
   matchOriginAsFallback: true,
   runAt: 'document_idle',
   main() {
+    // about:blank / srcdoc / sandboxed frames (which the fallback flags inject
+    // into) may have no usable extension context — `chrome.runtime.id` is absent.
+    // Bail before touching any extension API so the messaging polyfill can't throw.
+    if (!(globalThis as { chrome?: { runtime?: { id?: string } } }).chrome?.runtime?.id) return;
     void boot().catch(() => {});
   },
 });
