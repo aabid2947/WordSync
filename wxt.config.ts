@@ -13,7 +13,7 @@ export default defineConfig({
       'Local-first word suggestions for the web, synced with your Gboard dictionary.',
     // `offscreen` hosts the WebLLM engine (WebGPU is unavailable in the service worker).
     // `scripting` + `<all_urls>` content script power suggestions in any text field.
-    permissions: ['storage', 'offscreen', 'scripting'],
+    permissions: ['storage', 'offscreen', 'scripting', 'activeTab'],
     // WebLLM downloads model weights/libs from these CDNs (data, not code — MV3 OK).
     // The relay host is reached via CORS from the onboarding page (no entry needed).
     host_permissions: [

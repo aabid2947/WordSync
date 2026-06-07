@@ -45,6 +45,17 @@ export async function patchSettings(patch: Partial<Settings>): Promise<Settings>
   return next;
 }
 
+/** Whether suggestions are disabled for `host`. */
+export function isHostDenied(denylist: string[], host: string): boolean {
+  return host.length > 0 && denylist.includes(host);
+}
+
+/** Add or remove `host` from the denylist (pure; returns a new array). */
+export function toggleHost(denylist: string[], host: string): string[] {
+  if (!host) return denylist;
+  return denylist.includes(host) ? denylist.filter((h) => h !== host) : [...denylist, host];
+}
+
 /** Subscribe to settings changes across contexts. Returns an unsubscribe fn. */
 export function watchSettings(callback: (settings: Settings) => void): () => void {
   const listener = (

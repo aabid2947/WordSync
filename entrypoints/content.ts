@@ -3,7 +3,7 @@ import { caretRect, readField, type FieldState } from '../lib/dom/caret';
 import { deepActiveElement, isEditable } from '../lib/dom/detect';
 import { acceptInto } from '../lib/dom/insert';
 import { SuggestionStrip } from '../lib/dom/strip';
-import { getSettings, watchSettings, type Settings } from '../lib/storage/settings';
+import { getSettings, isHostDenied, watchSettings, type Settings } from '../lib/storage/settings';
 import { splitAtCaret } from '../lib/text/tokenize';
 import { sendMessage } from '../utils/messages';
 
@@ -34,7 +34,7 @@ async function boot(): Promise<void> {
 
   function isDenied(s: Settings): boolean {
     try {
-      return s.siteDenylist.includes(location.hostname);
+      return isHostDenied(s.siteDenylist, location.hostname);
     } catch {
       return false;
     }
