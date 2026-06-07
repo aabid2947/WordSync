@@ -26,6 +26,10 @@ function loadBaseWords(): Promise<string[]> {
 export default defineContentScript({
   matches: ['<all_urls>'],
   allFrames: true,
+  // Inject into about:blank / about:srcdoc / data: frames too — rich-text editors
+  // like TinyMCE and CKEditor put their editable <body> inside such an iframe.
+  matchAboutBlank: true,
+  matchOriginAsFallback: true,
   runAt: 'document_idle',
   main() {
     void boot().catch(() => {});
