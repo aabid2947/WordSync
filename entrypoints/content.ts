@@ -147,10 +147,18 @@ async function boot(): Promise<void> {
 
   function onFocusIn(e: Event): void {
     if (disabled) return;
-    const el = e.target as Element | null;
-    console.log('[wordsync] focusin', el?.tagName, 'editable=', isEditable(e.target));
-    if (isEditable(e.target)) {
-      target = e.target;
+    // Resolve the truly-focused element, descending through open shadow roots
+    // (a focusin's target is retargeted to the shadow host, which isn't editable).
+    const path = (e.composedPath?.() ?? []) as EventTarget[];
+    const candidate = path.find(isEditable) ?? deepActiveElement() ?? e.target;
+    console.log(
+      '[wordsync] focusin',
+      (candidate as Element | null)?.tagName,
+      'editable=',
+      isEditable(candidate),
+    );
+    if (isEditable(candidate)) {
+      target = candidate;
       void ensureModel().then(refresh);
     } else {
       target = null;

@@ -1,10 +1,12 @@
 // The suggestion strip. Vanilla DOM inside a Shadow root so the host page's CSS
-// can't touch it and ours can't leak out. No framework in this hot path.
+// can't touch it and ours can't leak out. Rendered in the browser TOP LAYER via
+// the Popover API so it sits above all page content regardless of the page's
+// z-index / transforms / overflow (falls back to a high-z-index fixed element).
 
 const STYLE = `
 :host { all: initial; }
 .strip {
-  position: fixed;
+  position: static;
   display: flex;
   gap: 4px;
   padding: 4px;
@@ -12,8 +14,6 @@ const STYLE = `
   background: #ffffff;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
   font: 13px/1.2 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  z-index: 2147483647;
-  max-width: 90vw;
   overflow: hidden;
 }
 .chip {
@@ -44,16 +44,38 @@ export class SuggestionStrip {
   private readonly container: HTMLElement;
   private items: HTMLButtonElement[] = [];
   private highlighted = -1;
+  private visible = false;
+  private readonly usePopover: boolean;
   private onAccept: AcceptHandler | null = null;
 
   constructor(private readonly doc: Document = document) {
     this.host = doc.createElement('wordsync-strip');
-    this.host.style.position = 'fixed';
-    this.host.style.top = '0';
-    this.host.style.left = '0';
-    this.host.style.display = 'none';
-    const root = this.host.attachShadow({ mode: 'open' });
+    // Defensive, !important host box styles so the host page's CSS can't hide or
+    // mis-position us. The host carries the position; the strip flows inside it.
+    const s = this.host.style;
+    for (const [prop, val] of [
+      ['position', 'fixed'],
+      ['inset', 'auto'],
+      ['top', '0'],
+      ['left', '0'],
+      ['margin', '0'],
+      ['padding', '0'],
+      ['border', '0'],
+      ['background', 'transparent'],
+      ['z-index', '2147483647'],
+      ['max-width', '92vw'],
+      ['pointer-events', 'auto'],
+      ['visibility', 'visible'],
+      ['opacity', '1'],
+    ] as const) {
+      s.setProperty(prop, val, 'important');
+    }
 
+    this.usePopover = typeof (this.host as { showPopover?: unknown }).showPopover === 'function';
+    if (this.usePopover) this.host.setAttribute('popover', 'manual');
+    else s.setProperty('display', 'none', 'important');
+
+    const root = this.host.attachShadow({ mode: 'open' });
     const style = doc.createElement('style');
     style.textContent = STYLE;
     this.container = doc.createElement('div');
@@ -70,20 +92,28 @@ export class SuggestionStrip {
     }
     this.onAccept = onAccept;
     this.render(words);
-    this.host.style.display = 'block'; // visible first so we can measure for placement
-    this.reposition(rect);
+    this.open();
+    this.reposition(rect); // after opening, so the box has measurable dimensions
   }
 
   hide(): void {
-    this.host.style.display = 'none';
+    if (this.usePopover) {
+      try {
+        if (this.visible) (this.host as { hidePopover(): void }).hidePopover();
+      } catch {
+        /* not open */
+      }
+    } else {
+      this.host.style.setProperty('display', 'none', 'important');
+    }
+    this.visible = false;
     this.highlighted = -1;
   }
 
   isVisible(): boolean {
-    return this.host.style.display !== 'none';
+    return this.visible;
   }
 
-  /** Move the active highlight (wraps). */
   move(direction: 1 | -1): void {
     if (this.items.length === 0) return;
     const n = this.items.length;
@@ -92,7 +122,6 @@ export class SuggestionStrip {
     this.paintHighlight();
   }
 
-  /** Accept the highlighted item, or the first if none is highlighted. */
   acceptHighlighted(): void {
     if (this.items.length === 0) return;
     this.onAccept?.(this.highlighted >= 0 ? this.highlighted : 0);
@@ -112,27 +141,36 @@ export class SuggestionStrip {
     if (rect && (rect.width || rect.height || rect.left || rect.bottom)) {
       left = Math.max(margin, Math.min(rect.left, vw - w - margin));
       const below = rect.bottom + margin;
-      // Prefer below the caret; flip above when it would overflow the viewport
-      // bottom (e.g. chat composers anchored near the bottom, like Gemini).
       top = below + h <= vh ? below : Math.max(margin, rect.top - h - margin);
     } else {
       left = Math.max(margin, vw - w - margin);
       top = vh - h - margin;
     }
 
-    this.container.style.left = `${left}px`;
-    this.container.style.top = `${top}px`;
-    this.container.style.right = 'auto';
-    this.container.style.bottom = 'auto';
+    this.host.style.setProperty('top', `${top}px`, 'important');
+    this.host.style.setProperty('left', `${left}px`, 'important');
   }
 
-  /** Whether an event target is inside the strip (so outside-clicks can dismiss). */
   contains(target: EventTarget | null): boolean {
     return target instanceof Node && this.host.contains(target);
   }
 
   destroy(): void {
     this.host.remove();
+  }
+
+  private open(): void {
+    if (this.usePopover) {
+      try {
+        if (!this.visible) (this.host as { showPopover(): void }).showPopover();
+      } catch {
+        // Already open, or not connected — fall back to display.
+        this.host.style.setProperty('display', 'block', 'important');
+      }
+    } else {
+      this.host.style.setProperty('display', 'block', 'important');
+    }
+    this.visible = true;
   }
 
   private render(words: string[]): void {
