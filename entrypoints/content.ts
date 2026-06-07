@@ -3,20 +3,17 @@ import { caretRect, readField, type FieldState } from '../lib/dom/caret';
 import { deepActiveElement, isEditable } from '../lib/dom/detect';
 import { acceptInto } from '../lib/dom/insert';
 import { SuggestionStrip } from '../lib/dom/strip';
-import { browser } from 'wxt/browser';
 import { getSettings, isHostDenied, watchSettings, type Settings } from '../lib/storage/settings';
 import { splitAtCaret } from '../lib/text/tokenize';
 import { sendMessage } from '../utils/messages';
 
-// Base English vocabulary (frequency-ordered): a packaged asset fetched once per
-// frame (lazily, on first use) rather than inlined, to keep the content bundle small.
+// Base English vocabulary, requested from the SW (which fetches it once). Going
+// through the SW avoids the host page's CSP blocking a content-script fetch on
+// strict sites (Gmail, Gemini, WhatsApp). Cached per frame.
 let baseWordsPromise: Promise<string[]> | null = null;
 function loadBaseWords(): Promise<string[]> {
   if (!baseWordsPromise) {
-    baseWordsPromise = fetch(browser.runtime.getURL('/words-en.txt'))
-      .then((r) => r.text())
-      .then((t) => t.split('\n').map((w) => w.trim()).filter(Boolean))
-      .catch(() => []);
+    baseWordsPromise = sendMessage('getBaseWords', undefined).catch(() => []);
   }
   return baseWordsPromise;
 }

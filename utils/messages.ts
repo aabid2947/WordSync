@@ -12,6 +12,8 @@ interface ProtocolMap {
   hydrate(): Snapshot;
   /** Content script -> SW: persist a batch of committed words (fire-and-forget). */
   learn(events: LearnEvent[]): void;
+  /** Content -> SW: the bundled base vocabulary (SW fetches it — CSP-immune). */
+  getBaseWords(): string[];
   /** Onboarding -> SW: bulk-seed imported Gboard words. Returns the count added. */
   seed(words: string[]): { imported: number };
   /** UI -> SW: lightweight stats for the popup. */

@@ -44,6 +44,22 @@ function ensureOffscreen(): Promise<void> {
   return offscreenReady;
 }
 
+// Base vocabulary, fetched once in the SW (the extension's own context — not
+// subject to the host page's CSP, unlike a content-script fetch). Cached for the
+// SW's lifetime.
+let baseWordsCache: string[] | null = null;
+async function getBaseWordsCached(): Promise<string[]> {
+  if (baseWordsCache) return baseWordsCache;
+  try {
+    const res = await fetch(browser.runtime.getURL('/words-en.txt'));
+    const text = await res.text();
+    baseWordsCache = text.split('\n').map((w) => w.trim()).filter(Boolean);
+  } catch {
+    baseWordsCache = [];
+  }
+  return baseWordsCache;
+}
+
 // Background service worker — the sole writer to IndexedDB and the orchestration
 // hub. It holds no long-lived state (MV3 can evict it at any time); every handler
 // reads/writes durable storage directly.
@@ -79,6 +95,9 @@ export default defineBackground(() => {
       return { words: [] };
     }
   });
+
+  // Content scripts get the base vocabulary from here (CSP-immune on strict sites).
+  onMessage('getBaseWords', () => getBaseWordsCached());
 
   onMessage('getStats', async () => ({ words: await wordCount() }));
 
