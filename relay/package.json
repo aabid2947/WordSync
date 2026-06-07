@@ -1,0 +1,19 @@
+{
+  "name": "wordsync-relay",
+  "version": "0.1.0",
+  "description": "WordSync QR relay — ephemeral, in-memory dictionary handoff. Never persists to disk.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "compile": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260607.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8",
+    "wrangler": "^3.90.0"
+  }
+}

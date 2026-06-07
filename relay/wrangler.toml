@@ -1,0 +1,13 @@
+name = "wordsync-relay"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+# Durable Object that holds each session's file in memory only.
+[[durable_objects.bindings]]
+name = "SESSION"
+class_name = "Session"
+
+# Non-SQLite DO (we never touch ctx.storage — the file stays in memory).
+[[migrations]]
+tag = "v1"
+new_classes = ["Session"]

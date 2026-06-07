@@ -8,6 +8,6 @@ export default defineConfig({
   test: {
     environment: 'happy-dom',
     include: ['**/*.test.ts', '**/*.test.tsx'],
-    exclude: ['node_modules/**', '.wxt/**', '.output/**'],
+    exclude: ['node_modules/**', '.wxt/**', '.output/**', 'relay/**'],
   },
 });
