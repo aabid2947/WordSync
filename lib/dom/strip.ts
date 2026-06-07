@@ -70,8 +70,8 @@ export class SuggestionStrip {
     }
     this.onAccept = onAccept;
     this.render(words);
+    this.host.style.display = 'block'; // visible first so we can measure for placement
     this.reposition(rect);
-    this.host.style.display = 'block';
   }
 
   hide(): void {
@@ -99,18 +99,31 @@ export class SuggestionStrip {
   }
 
   reposition(rect: DOMRect | null): void {
-    const margin = 4;
-    if (rect) {
-      this.container.style.top = `${rect.bottom + margin}px`;
-      this.container.style.left = `${rect.left}px`;
-      this.container.style.right = 'auto';
+    const margin = 6;
+    const win = this.doc.defaultView;
+    const vw = win?.innerWidth ?? 1024;
+    const vh = win?.innerHeight ?? 768;
+    const box = this.container.getBoundingClientRect();
+    const w = box.width || 180;
+    const h = box.height || 32;
+
+    let top: number;
+    let left: number;
+    if (rect && (rect.width || rect.height || rect.left || rect.bottom)) {
+      left = Math.max(margin, Math.min(rect.left, vw - w - margin));
+      const below = rect.bottom + margin;
+      // Prefer below the caret; flip above when it would overflow the viewport
+      // bottom (e.g. chat composers anchored near the bottom, like Gemini).
+      top = below + h <= vh ? below : Math.max(margin, rect.top - h - margin);
     } else {
-      // Anchored fallback: bottom-right of the viewport.
-      this.container.style.top = 'auto';
-      this.container.style.left = 'auto';
-      this.container.style.right = `${margin}px`;
-      this.container.style.bottom = `${margin}px`;
+      left = Math.max(margin, vw - w - margin);
+      top = vh - h - margin;
     }
+
+    this.container.style.left = `${left}px`;
+    this.container.style.top = `${top}px`;
+    this.container.style.right = 'auto';
+    this.container.style.bottom = 'auto';
   }
 
   /** Whether an event target is inside the strip (so outside-clicks can dismiss). */
