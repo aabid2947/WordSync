@@ -150,7 +150,10 @@ async function boot(): Promise<void> {
   }
 
   function onInput(e: Event): void {
-    if (e.target === target) refresh();
+    // Match the tracked field, or a node inside it — some editors fire `input`
+    // on a nested node rather than the contenteditable host itself.
+    const t = e.target;
+    if (t === target || (target !== null && t instanceof Node && target.contains(t))) refresh();
   }
 
   function onKeyDown(e: KeyboardEvent): void {
@@ -183,7 +186,11 @@ async function boot(): Promise<void> {
   }
 
   function onPointerDown(e: Event): void {
-    if (strip?.isVisible() && !strip.contains(e.target)) strip.hide();
+    if (!strip?.isVisible()) return;
+    const t = e.target;
+    if (strip.contains(t)) return; // clicking a chip
+    if (target !== null && t instanceof Node && target.contains(t)) return; // clicking in the field
+    strip.hide();
   }
 
   document.addEventListener('focusin', onFocusIn, true);
