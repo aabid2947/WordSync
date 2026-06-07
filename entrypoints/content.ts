@@ -3,14 +3,23 @@ import { caretRect, readField, type FieldState } from '../lib/dom/caret';
 import { deepActiveElement, isEditable } from '../lib/dom/detect';
 import { acceptInto } from '../lib/dom/insert';
 import { SuggestionStrip } from '../lib/dom/strip';
+import { browser } from 'wxt/browser';
 import { getSettings, isHostDenied, watchSettings, type Settings } from '../lib/storage/settings';
 import { splitAtCaret } from '../lib/text/tokenize';
 import { sendMessage } from '../utils/messages';
-import baseWordsRaw from '../lib/engine/data/words-en.txt?raw';
 
-// Bundled base English vocabulary (frequency-ordered) for cold-start suggestions
-// and spelling-correction targets. Parsed once per frame.
-const BASE_WORDS = baseWordsRaw.split('\n').map((w) => w.trim()).filter(Boolean);
+// Base English vocabulary (frequency-ordered): a packaged asset fetched once per
+// frame (lazily, on first use) rather than inlined, to keep the content bundle small.
+let baseWordsPromise: Promise<string[]> | null = null;
+function loadBaseWords(): Promise<string[]> {
+  if (!baseWordsPromise) {
+    baseWordsPromise = fetch(browser.runtime.getURL('/words-en.txt'))
+      .then((r) => r.text())
+      .then((t) => t.split('\n').map((w) => w.trim()).filter(Boolean))
+      .catch(() => []);
+  }
+  return baseWordsPromise;
+}
 
 // Content script — every frame, every site (isolated world). All handlers are
 // defensive: a failure degrades to "no suggestions", never a broken page.
@@ -30,7 +39,6 @@ async function boot(): Promise<void> {
   let settings = initial;
   let disabled = isDenied(settings);
   const controller = new SuggestionController(settings.suggestionCount);
-  controller.setBase(BASE_WORDS);
   let strip: SuggestionStrip | null = null;
   let target: HTMLElement | null = null;
   let modelLoading = false;
@@ -56,6 +64,7 @@ async function boot(): Promise<void> {
     modelLoading = true;
     try {
       controller.setSnapshot(await sendMessage('hydrate', undefined));
+      controller.setBase(await loadBaseWords());
     } catch {
       // SW unavailable — stay quiet; we retry on the next focus.
     } finally {

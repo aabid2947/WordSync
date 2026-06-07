@@ -25,5 +25,8 @@ export default defineConfig({
     content_security_policy: {
       extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';",
     },
+    // The base wordlist is fetched at runtime by the content script (kept out of
+    // the content bundle). Public English data — no privacy concern in exposing it.
+    web_accessible_resources: [{ resources: ['words-en.txt'], matches: ['<all_urls>'] }],
   },
 });

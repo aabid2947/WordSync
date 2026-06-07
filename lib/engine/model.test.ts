@@ -131,6 +131,13 @@ describe('base vocabulary + correction', () => {
     expect(out[0]?.source).toBe('correction');
   });
 
+  it('corrects a longer word at distance 2 sharing the first letter', () => {
+    const m = new SuggestionModel({ version: 1, unigrams: [], ngrams: [] });
+    m.loadBase(['elaborating', 'elaborate', 'decorating']);
+    // exoborating -> elaborating is 2 edits (x->l, o->a) and shares the first letter.
+    expect(m.correct('exoborating', 3).map((s) => s.word)).toContain('elaborating');
+  });
+
   it('does not "correct" a correctly-spelled known word', () => {
     const m = withBase();
     expect(m.correct('world', 3)).toEqual([]); // known base word

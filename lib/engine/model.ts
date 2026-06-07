@@ -186,7 +186,7 @@ export class SuggestionModel {
   correct(token: string, limit: number): Suggestion[] {
     const t = token.toLowerCase();
     if (limit <= 0 || t.length < 3 || t.length > 24 || this.isKnown(t)) return [];
-    const max = t.length <= 4 ? 1 : 2;
+    const max = t.length <= 4 ? 1 : t.length <= 8 ? 2 : 3;
 
     interface Cand {
       word: string;
@@ -201,7 +201,9 @@ export class SuggestionModel {
       if (dist >= 1 && dist <= max) found.push({ word, dist, freq, personal });
     };
     for (const e of this.words) consider(e.word, e.count, true);
-    for (const w of this.baseSorted) consider(w, this.baseFreq(w), false);
+    // Scan only base words sharing the first letter — keeps the ~50k list fast and
+    // covers the common typos (those that preserve the first character).
+    for (const w of prefixIn(this.baseSorted, t[0]!)) consider(w, this.baseFreq(w), false);
 
     const best = new Map<string, Cand>();
     for (const c of found) {
@@ -218,7 +220,7 @@ export class SuggestionModel {
       .slice(0, limit)
       .map((c) => ({
         word: c.word,
-        score: (c.dist === 1 ? 0.58 : 0.42) + (c.personal ? 0.02 : 0),
+        score: Math.max(0.2, 0.58 - (c.dist - 1) * 0.16) + (c.personal ? 0.02 : 0),
         source: 'correction' as const,
       }));
   }
