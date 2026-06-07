@@ -1,6 +1,8 @@
 import type { LearnEvent, Snapshot, WordRow } from '../lib/storage/types';
 import type { WordPage } from '../lib/storage/words';
 import type { CompletionRequest, CompletionResult, LlmStatus } from '../lib/engine/llm';
+import type { Metrics } from '../lib/storage/metrics';
+import type { SuggestionSource } from '../lib/engine/types';
 
 /**
  * Typed cross-context messaging over `chrome.runtime` directly. Deliberately does
@@ -23,6 +25,9 @@ interface ProtocolMap {
   deleteWord(word: string): void;
   exportWords(): { words: WordRow[] };
   clearData(): void;
+  recordAccept(source: SuggestionSource): void;
+  getMetrics(): Metrics;
+  clearMetrics(): void;
 }
 
 type Keys = keyof ProtocolMap;

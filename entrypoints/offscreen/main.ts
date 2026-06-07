@@ -1,4 +1,10 @@
-import { buildPrompt, extractWords, type CompletionRequest, type LlmStatus } from '../../lib/engine/llm';
+import {
+  buildPrompt,
+  extractWords,
+  type CompletionRequest,
+  type CompletionResult,
+  type LlmStatus,
+} from '../../lib/engine/llm';
 import { getSettings } from '../../lib/storage/settings';
 import { onMessage } from '../../utils/messages';
 
@@ -35,31 +41,48 @@ function loadEngine(): Promise<Engine> {
   return enginePromise;
 }
 
-async function complete(request: CompletionRequest, limit: number): Promise<string[]> {
+async function complete(request: CompletionRequest, limit: number): Promise<CompletionResult> {
   const prompt = buildPrompt(request.context);
-  if (!prompt) return [];
-  const engine = await loadEngine();
-  const reply = await engine.chat.completions.create({
-    messages: [
-      {
-        role: 'system',
-        content:
-          'Continue the user text with only the most likely next word or two. Reply with words only, no punctuation or explanation.',
-      },
-      { role: 'user', content: prompt },
-    ],
-    max_tokens: 8,
-    temperature: 0.2,
-  });
-  const text = reply.choices[0]?.message?.content ?? '';
-  return extractWords(text, limit);
+  if (!prompt) return { words: [], latencyMs: 0, ok: true };
+
+  const needsLoad = !status.ready;
+  const loadStart = performance.now();
+  let engine: Engine;
+  try {
+    engine = await loadEngine();
+  } catch {
+    const loadedMs = needsLoad ? Math.round(performance.now() - loadStart) : undefined;
+    return { words: [], latencyMs: 0, ok: false, ...(loadedMs != null ? { loadedMs } : {}) };
+  }
+  const loadedMs = needsLoad ? Math.round(performance.now() - loadStart) : undefined;
+  const load = loadedMs != null ? { loadedMs } : {};
+
+  const start = performance.now();
+  try {
+    const reply = await engine.chat.completions.create({
+      messages: [
+        {
+          role: 'system',
+          content:
+            'Continue the user text with only the most likely next word or two. Reply with words only, no punctuation or explanation.',
+        },
+        { role: 'user', content: prompt },
+      ],
+      max_tokens: 8,
+      temperature: 0.2,
+    });
+    const text = reply.choices[0]?.message?.content ?? '';
+    return { words: extractWords(text, limit), latencyMs: Math.round(performance.now() - start), ok: true, ...load };
+  } catch {
+    return { words: [], latencyMs: Math.round(performance.now() - start), ok: false, ...load };
+  }
 }
 
 onMessage('generateCompletion', async ({ data }) => {
   try {
-    return { words: await complete(data, 3) };
+    return await complete(data, 3);
   } catch {
-    return { words: [] }; // fail silent — fast path still serves suggestions
+    return { words: [], latencyMs: 0, ok: false }; // fail silent — fast path still serves
   }
 });
 

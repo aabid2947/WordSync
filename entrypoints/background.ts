@@ -2,6 +2,7 @@ import { browser } from 'wxt/browser';
 import { onMessage, sendMessage } from '../utils/messages';
 import { buildSnapshot } from '../lib/storage/snapshot';
 import { clearAll } from '../lib/storage/db';
+import { clearMetrics, getMetrics, recordAccept, recordLlmSample } from '../lib/storage/metrics';
 import {
   allWords,
   applyLearnEvents,
@@ -90,7 +91,15 @@ export default defineBackground(() => {
   onMessage('requestCompletion', async ({ data }) => {
     try {
       await ensureOffscreen();
-      return await sendMessage('generateCompletion', data);
+      const res = await sendMessage('generateCompletion', data);
+      void recordLlmSample({
+        context: data.context.join(' '),
+        predictions: res.words,
+        latencyMs: res.latencyMs ?? 0,
+        ok: res.ok ?? true,
+        ...(res.loadedMs != null ? { loadedMs: res.loadedMs } : {}),
+      }).catch(() => {});
+      return { words: res.words };
     } catch {
       return { words: [] };
     }
@@ -106,6 +115,13 @@ export default defineBackground(() => {
   onMessage('deleteWord', ({ data }) => deleteWord(data));
   onMessage('exportWords', async () => ({ words: await allWords() }));
   onMessage('clearData', () => clearAll());
+
+  // Local metrics (personal evaluation, esp. WebLLM).
+  onMessage('recordAccept', ({ data }) => {
+    void recordAccept(data).catch(() => {});
+  });
+  onMessage('getMetrics', () => getMetrics());
+  onMessage('clearMetrics', () => clearMetrics());
 
   browser.runtime.onInstalled.addListener((details) => {
     if (details.reason === 'install') {

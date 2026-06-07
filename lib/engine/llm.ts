@@ -9,6 +9,12 @@ export interface CompletionRequest {
 
 export interface CompletionResult {
   words: string[];
+  /** Generation latency in ms (for metrics). */
+  latencyMs?: number;
+  /** Whether generation succeeded. */
+  ok?: boolean;
+  /** If the model loaded during this call, how long that took (ms). */
+  loadedMs?: number;
 }
 
 export interface LlmStatus {

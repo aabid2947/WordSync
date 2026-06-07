@@ -6,6 +6,8 @@ import {
   type Settings,
 } from '../../lib/storage/settings';
 import type { WordRow } from '../../lib/storage/types';
+import type { Metrics } from '../../lib/storage/metrics';
+import type { SuggestionSource } from '../../lib/engine/types';
 import { sendMessage } from '../../utils/messages';
 
 const PAGE = 100;
@@ -24,8 +26,87 @@ export function App() {
     <main class="options">
       <h1>WordSync</h1>
       <SettingsSection />
+      <MetricsSection />
       <WordSection />
     </main>
+  );
+}
+
+const SOURCES: SuggestionSource[] = ['frequency', 'correction', 'ngram', 'base', 'llm'];
+
+function MetricsSection() {
+  const [m, setM] = useState<Metrics | null>(null);
+
+  function load(): void {
+    void sendMessage('getMetrics', undefined).then(setM).catch(() => {});
+  }
+  useEffect(load, []);
+  if (!m) return null;
+
+  const avgLatency = m.llm.requests ? Math.round(m.llm.totalLatencyMs / m.llm.requests) : 0;
+  const avgLoad = m.llm.loads ? Math.round(m.llm.totalLoadMs / m.llm.loads) : 0;
+  const llmAccepts = m.accepts.llm ?? 0;
+  const acceptRate = m.llm.requests ? Math.round((llmAccepts / m.llm.requests) * 100) : 0;
+
+  return (
+    <section class="card">
+      <div class="words-head">
+        <h2>Insights — local only</h2>
+        <button onClick={() => void sendMessage('clearMetrics', undefined).then(load)}>
+          Clear stats
+        </button>
+      </div>
+      <p class="muted">
+        Since {new Date(m.since).toLocaleString()}. Nothing here leaves your device.
+      </p>
+
+      <h3>WebLLM</h3>
+      <ul class="stats">
+        <li>Requests: <b>{m.llm.requests}</b></li>
+        <li>Errors: <b>{m.llm.errors}</b></li>
+        <li>Avg latency: <b>{avgLatency} ms</b></li>
+        <li>
+          Model loads: <b>{m.llm.loads}</b>
+          {m.llm.loads > 0 ? ` (avg ${avgLoad} ms, ${m.llm.loadErrors} failed)` : ''}
+        </li>
+        <li>LLM accepted: <b>{llmAccepts}</b> (~{acceptRate}% of requests)</li>
+      </ul>
+
+      <h3>Accepted by source</h3>
+      <ul class="stats">
+        {SOURCES.map((src) => (
+          <li key={src}>
+            {src}: <b>{m.accepts[src] ?? 0}</b>
+          </li>
+        ))}
+      </ul>
+
+      <h3>Recent WebLLM predictions</h3>
+      {m.recentLlm.length === 0 ? (
+        <p class="muted">No WebLLM activity yet (enable “Local AI model” and type for a while).</p>
+      ) : (
+        <table class="llm-table">
+          <thead>
+            <tr>
+              <th>time</th>
+              <th>context</th>
+              <th>predicted</th>
+              <th>ms</th>
+            </tr>
+          </thead>
+          <tbody>
+            {m.recentLlm.slice(0, 40).map((s, i) => (
+              <tr key={i} class={s.ok ? '' : 'err'}>
+                <td>{new Date(s.ts).toLocaleTimeString()}</td>
+                <td class="ctx">{s.context || '—'}</td>
+                <td>{s.predictions.join(', ') || (s.ok ? '—' : 'error')}</td>
+                <td>{s.latencyMs}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
   );
 }
 

@@ -154,9 +154,11 @@ async function boot(): Promise<void> {
     try {
       const state = readField(target);
       if (!state) return;
+      const source = controller.sourceAt(index);
       const plan = controller.accept(state, index);
       if (!plan) return;
       acceptInto(target, plan.deleteBefore, plan.text);
+      if (source) void sendMessage('recordAccept', source).catch(() => {});
       scheduleLearnFlush();
       queueMicrotask(refresh); // surface next-word suggestions after the insert
     } catch {

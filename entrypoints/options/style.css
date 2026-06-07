@@ -121,6 +121,62 @@ button.more {
   color: #c5221f;
 }
 
+.card h3 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.6;
+  margin: 18px 0 8px;
+}
+.muted {
+  font-size: 12px;
+  opacity: 0.6;
+}
+.stats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+.stats li {
+  font-size: 13px;
+}
+.llm-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.llm-table th,
+.llm-table td {
+  text-align: left;
+  padding: 4px 6px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  vertical-align: top;
+}
+.llm-table th {
+  opacity: 0.5;
+  font-weight: 600;
+}
+.llm-table .ctx {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.8;
+}
+.llm-table tr.err td {
+  color: #c5221f;
+}
+
+@media (prefers-color-scheme: dark) {
+  .llm-table th,
+  .llm-table td {
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+}
+
 @media (prefers-color-scheme: dark) {
   body {
     background: #1f1f22;

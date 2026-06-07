@@ -27,6 +27,7 @@ export class SuggestionController {
   private lastPrefix = '';
   private lastContext: string[] = [];
   private shown: string[] = [];
+  private shownSuggestions: Suggestion[] = [];
   private lastFast: Suggestion[] = [];
   private nextWord = false;
   private baseWords: string[] = [];
@@ -48,6 +49,11 @@ export class SuggestionController {
   /** True when the last update was a next-word context (worth an LLM query). */
   get suggestsNextWord(): boolean {
     return this.nextWord;
+  }
+
+  /** Source of the currently-displayed suggestion at `index` (for metrics). */
+  sourceAt(index: number): Suggestion['source'] | undefined {
+    return this.shownSuggestions[index]?.source;
   }
 
   setSnapshot(snapshot: Snapshot): void {
@@ -82,13 +88,15 @@ export class SuggestionController {
     if (prefix === '' && context.length === 0) {
       this.nextWord = false;
       this.lastFast = [];
+      this.shownSuggestions = [];
       this.shown = [];
       return this.shown;
     }
 
     this.nextWord = prefix === '';
     this.lastFast = suggestFast(this.model, state.text, state.caret, this.limit);
-    this.shown = blend([this.lastFast], this.limit).map((s) => s.word);
+    this.shownSuggestions = blend([this.lastFast], this.limit);
+    this.shown = this.shownSuggestions.map((s) => s.word);
     return this.shown;
   }
 
@@ -102,7 +110,8 @@ export class SuggestionController {
       const w = word.toLowerCase();
       if (w) llm.push({ word: w, score: Math.max(0.1, LLM_TOP_SCORE - i * LLM_STEP), source: 'llm' });
     });
-    this.shown = blend([this.lastFast, llm], this.limit).map((s) => s.word);
+    this.shownSuggestions = blend([this.lastFast, llm], this.limit);
+    this.shown = this.shownSuggestions.map((s) => s.word);
     return this.shown;
   }
 
