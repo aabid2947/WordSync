@@ -10,6 +10,8 @@ interface ProtocolMap {
   hydrate(): Snapshot;
   /** Content script -> SW: persist a batch of committed words (fire-and-forget). */
   learn(events: LearnEvent[]): void;
+  /** Onboarding -> SW: bulk-seed imported Gboard words. Returns the count added. */
+  seed(words: string[]): { imported: number };
   /** UI -> SW: lightweight stats for the popup. */
   getStats(): { words: number };
 }
