@@ -29,11 +29,13 @@ export default defineContentScript({
   matchOriginAsFallback: true,
   runAt: 'document_idle',
   main() {
+    const hasCtx = !!(globalThis as { chrome?: { runtime?: { id?: string } } }).chrome?.runtime?.id;
+    console.log('[wordsync] content loaded', { url: location.href, hasCtx, top: window.top === window });
     // about:blank / srcdoc / sandboxed frames (which the fallback flags inject
     // into) may have no usable extension context — `chrome.runtime.id` is absent.
     // Bail before touching any extension API so the messaging polyfill can't throw.
-    if (!(globalThis as { chrome?: { runtime?: { id?: string } } }).chrome?.runtime?.id) return;
-    void boot().catch(() => {});
+    if (!hasCtx) return;
+    void boot().catch((e) => console.log('[wordsync] boot error', e));
   },
 });
 
@@ -43,6 +45,7 @@ async function boot(): Promise<void> {
 
   let settings = initial;
   let disabled = isDenied(settings);
+  console.log('[wordsync] boot', { host: location.hostname, disabled });
   const controller = new SuggestionController(settings.suggestionCount);
   let strip: SuggestionStrip | null = null;
   let target: HTMLElement | null = null;
@@ -69,9 +72,11 @@ async function boot(): Promise<void> {
     modelLoading = true;
     try {
       controller.setSnapshot(await sendMessage('hydrate', undefined));
-      controller.setBase(await loadBaseWords());
-    } catch {
-      // SW unavailable — stay quiet; we retry on the next focus.
+      const base = await loadBaseWords();
+      controller.setBase(base);
+      console.log('[wordsync] model ready, base words:', base.length);
+    } catch (e) {
+      console.log('[wordsync] ensureModel failed', e);
     } finally {
       modelLoading = false;
     }
@@ -96,6 +101,7 @@ async function boot(): Promise<void> {
         return;
       }
       const words = controller.update(state);
+      console.log('[wordsync] refresh', { text: state.text, caret: state.caret, words, ready: controller.ready });
       if (controller.pendingCount > 0) scheduleLearnFlush();
       if (words.length === 0) {
         strip?.hide();
@@ -141,6 +147,8 @@ async function boot(): Promise<void> {
 
   function onFocusIn(e: Event): void {
     if (disabled) return;
+    const el = e.target as Element | null;
+    console.log('[wordsync] focusin', el?.tagName, 'editable=', isEditable(e.target));
     if (isEditable(e.target)) {
       target = e.target;
       void ensureModel().then(refresh);
