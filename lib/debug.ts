@@ -1,10 +1,10 @@
 // Lightweight, opt-in debug logging. Silent by default. To enable on a page:
 //   localStorage['wordsync-debug'] = '1'   (then reload the tab)
-let enabled = false;
+let enabled = true; // TEMP: forced on for diagnosis — revert to the localStorage check after.
 try {
-  enabled = globalThis.localStorage?.getItem('wordsync-debug') === '1';
+  enabled = enabled || globalThis.localStorage?.getItem('wordsync-debug') === '1';
 } catch {
-  enabled = false; // some pages block localStorage access
+  // some pages block localStorage access
 }
 
 export const DEBUG = enabled;

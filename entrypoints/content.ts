@@ -113,6 +113,7 @@ async function boot(): Promise<void> {
   // Hide the strip AND invalidate any in-flight LLM response, so a late LLM reply
   // can't re-show the strip after the user cleared/sent (the lingering bug).
   function dismiss(): void {
+    dlog('dismiss');
     llmSeq += 1;
     strip?.hide();
   }
@@ -142,6 +143,7 @@ async function boot(): Promise<void> {
         strip?.hide();
         return;
       }
+      dlog('show', words);
       getStrip().show(words, caretRect(target), onAccept);
       maybeRequestLLM(state, llmSeq);
     } catch {
@@ -157,8 +159,10 @@ async function boot(): Promise<void> {
       llmTimer = null;
       void sendMessage('requestCompletion', { prefix: '', context })
         .then(({ words }) => {
+          dlog('llm reply', { stale: seq !== llmSeq, hasTarget: !!target, words });
           if (seq !== llmSeq || !target || words.length === 0) return;
           const merged = controller.blendWith(words);
+          dlog('llm show', merged);
           if (merged.length > 0) getStrip().show(merged, caretRect(target), onAccept);
         })
         .catch(() => {});
