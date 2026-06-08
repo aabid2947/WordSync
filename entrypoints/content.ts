@@ -110,8 +110,16 @@ async function boot(): Promise<void> {
     }, 1500);
   }
 
+  // Hide the strip AND invalidate any in-flight LLM response, so a late LLM reply
+  // can't re-show the strip after the user cleared/sent (the lingering bug).
+  function dismiss(): void {
+    llmSeq += 1;
+    strip?.hide();
+  }
+
   function refresh(): void {
     if (disabled || !target) return;
+    llmSeq += 1; // invalidate any in-flight LLM request before recomputing
     // The field was removed/replaced (e.g. some editors swap the node on send).
     if (!target.isConnected) {
       unobserve();
@@ -119,7 +127,6 @@ async function boot(): Promise<void> {
       strip?.hide();
       return;
     }
-    llmSeq += 1; // invalidate any in-flight LLM request
     try {
       const state = readField(target);
       // Empty / whitespace-only field → nothing to suggest; dismiss (covers
@@ -194,14 +201,14 @@ async function boot(): Promise<void> {
     } else {
       target = null;
       unobserve();
-      strip?.hide();
+      dismiss();
     }
   }
 
   function onFocusOut(e: Event): void {
     // Focus leaving the tracked field dismisses the strip. Chip clicks use
     // mousedown+preventDefault, so they don't blur the field.
-    if (e.target === target) strip?.hide();
+    if (e.target === target) dismiss();
   }
 
   function onInput(e: Event): void {
@@ -239,10 +246,10 @@ async function boot(): Promise<void> {
       case 'Enter':
         // Enter sends the message / inserts a newline — never accepts, always
         // dismisses the strip so it doesn't linger after send.
-        strip.hide();
+        dismiss();
         break;
       case 'Escape':
-        strip.hide();
+        dismiss();
         break;
       default:
         break;
@@ -258,7 +265,7 @@ async function boot(): Promise<void> {
     const t = e.target;
     if (strip.contains(t)) return; // clicking a chip
     if (target !== null && t instanceof Node && target.contains(t)) return; // clicking in the field
-    strip.hide();
+    dismiss();
   }
 
   document.addEventListener('focusin', onFocusIn, true);
