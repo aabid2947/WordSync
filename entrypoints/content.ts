@@ -112,10 +112,19 @@ async function boot(): Promise<void> {
 
   function refresh(): void {
     if (disabled || !target) return;
+    // The field was removed/replaced (e.g. some editors swap the node on send).
+    if (!target.isConnected) {
+      unobserve();
+      target = null;
+      strip?.hide();
+      return;
+    }
     llmSeq += 1; // invalidate any in-flight LLM request
     try {
       const state = readField(target);
-      if (!state) {
+      // Empty / whitespace-only field → nothing to suggest; dismiss (covers
+      // "cleared the box" and "sent the message, box reset").
+      if (!state || state.text.trim() === '') {
         strip?.hide();
         return;
       }
