@@ -205,23 +205,6 @@ async function boot(): Promise<void> {
   function onKeyDown(e: KeyboardEvent): void {
     if (!strip || !strip.isVisible()) return;
     switch (e.key) {
-      case 'Tab':
-        // Tab always accepts the highlighted/first suggestion.
-        e.preventDefault();
-        e.stopPropagation();
-        strip.acceptHighlighted();
-        break;
-      case 'Enter':
-        // Enter only accepts when the user has arrowed to a suggestion; otherwise
-        // it passes through (send the message / newline) and we dismiss the strip.
-        if (strip.hasHighlight()) {
-          e.preventDefault();
-          e.stopPropagation();
-          strip.acceptHighlighted();
-        } else {
-          strip.hide();
-        }
-        break;
       case 'ArrowDown':
         e.preventDefault();
         strip.move(1);
@@ -229,6 +212,25 @@ async function boot(): Promise<void> {
       case 'ArrowUp':
         e.preventDefault();
         strip.move(-1);
+        break;
+      case ' ':
+        // Space fills the suggestion you've arrowed to; otherwise it types a space.
+        if (strip.hasHighlight()) {
+          e.preventDefault();
+          e.stopPropagation();
+          strip.acceptHighlighted();
+        }
+        break;
+      case 'Tab':
+        // Tab accepts the highlighted/first suggestion.
+        e.preventDefault();
+        e.stopPropagation();
+        strip.acceptHighlighted();
+        break;
+      case 'Enter':
+        // Enter sends the message / inserts a newline — never accepts, always
+        // dismisses the strip so it doesn't linger after send.
+        strip.hide();
         break;
       case 'Escape':
         strip.hide();
